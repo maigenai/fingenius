@@ -1,0 +1,95 @@
+version: '3.8'
+
+services:
+  backend:
+    build: ./backend
+    container_name: fingenius-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - ./data:/data
+    env_file:
+      - .env
+    depends_on:
+      - db
+      - redis
+    networks:
+      - fingenius-network
+
+  frontend:
+    build: ./frontend
+    container_name: fingenius-frontend
+    ports:
+      - "3001:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    env_file:
+      - .env
+    depends_on:
+      - backend
+    networks:
+      - fingenius-network
+
+  db:
+    image: postgres:15
+    container_name: fingenius-db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=fingenius
+    networks:
+      - fingenius-network
+
+  redis:
+    image: redis:7
+    container_name: fingenius-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - fingenius-network
+
+  celery-worker:
+    build: ./backend
+    container_name: fingenius-celery-worker
+    command: celery -A app.worker worker --loglevel=info
+    volumes:
+      - ./backend:/app
+      - ./data:/data
+    env_file:
+      - .env
+    depends_on:
+      - backend
+      - redis
+      - db
+    networks:
+      - fingenius-network
+
+  celery-flower:
+    build: ./backend
+    container_name: fingenius-celery-flower
+    command: celery -A app.worker flower --port=5555
+    ports:
+      - "5555:5555"
+    volumes:
+      - ./backend:/app
+    env_file:
+      - .env
+    depends_on:
+      - backend
+      - redis
+      - celery-worker
+    networks:
+      - fingenius-network
+
+networks:
+  fingenius-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
